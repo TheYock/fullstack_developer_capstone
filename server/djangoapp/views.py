@@ -15,6 +15,7 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 from .models import CarMake, CarModel  # Ensure this line is present
 from .populate import initiate  # Ensure this line is present
+from .restapis import get_request, analyze_review_sentiments, post_review
 # from .populate import initiate
 
 
@@ -78,18 +79,38 @@ def get_cars(request):
         cars.append({"CarModel": car_model.name, "CarMake": car_model.car_make.name})
     return JsonResponse({"CarModels": cars})
 # # Update the `get_dealerships` view to render the index page with
-# a list of dealerships
-# def get_dealerships(request):
-# ...
-
-# Create a `get_dealer_reviews` view to render the reviews of a dealer
-# def get_dealer_reviews(request,dealer_id):
-# ...
+def get_dealerships(request, state="All"):
+    if state == "All":
+        endpoint = "/fetchDealers"
+    else:
+        endpoint = f"/fetchDealers/{state}"
+    dealerships = get_request(endpoint)
+    return JsonResponse({"status": 200, "dealers": dealerships})
 
 # Create a `get_dealer_details` view to render the dealer details
-# def get_dealer_details(request, dealer_id):
-# ...
+def get_dealer_details(request, dealer_id):
+    endpoint = f"/fetchDealer/{dealer_id}"
+    dealer_details = get_request(endpoint)
+    return JsonResponse({"status": 200, "dealer_details": dealer_details})
 
-# Create a `add_review` view to submit a review
-# def add_review(request):
-# ...
+# Create a `get_dealer_reviews` view to render the reviews of a dealer
+def get_dealer_reviews(request, dealer_id):
+    endpoint = f"/fetchReviews/dealer/{dealer_id}"
+    reviews = get_request(endpoint)
+    
+    for review in reviews:
+        sentiment = analyze_review_sentiments(review['review'])
+        review['sentiment'] = sentiment['label']  # Assuming sentiment analysis returns a label field
+    
+    return JsonResponse({"status": 200, "dealer_reviews": reviews})
+
+def add_review(request):
+    if request.user.is_authenticated:
+        data = json.loads(request.body)
+        try:
+            response = post_review(data)
+            return JsonResponse({"status": 200, "response": response})
+        except Exception as err:
+            return JsonResponse({"status": 401, "message": str(err)})
+    else:
+        return JsonResponse({"status": 403, "message": "Unauthorized"})
